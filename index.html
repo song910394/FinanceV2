@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="earth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>H&S 記帳 V2</title>
+    <meta name="description" content="H&S 個人財務管理系統 V2 — 重新設計版，6 主題、離線優先" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="./manifest.json" />
+
+    <!-- iOS Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="H&S V2">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- Theme Color (預設 earth；JS 會依目前主題覆寫) -->
+    <meta name="theme-color" id="theme-color-meta" content="#F4EDE0">
+
+    <!-- App Icons -->
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512x512.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192x192.png">
+
+    <!-- Polyfill for process.env -->
+    <script>
+      window.process = { env: { API_KEY: "" } };
+    </script>
+
+    <!-- 在 React 載入前先把 localStorage 的主題寫到 <html data-theme>，避免閃白 -->
+    <script>
+      try {
+        var t = localStorage.getItem('hs_theme_v2');
+        if (t && ['earth','macaron','midnight','mint','sunset','mono'].includes(t)) {
+          document.documentElement.setAttribute('data-theme', t);
+        }
+      } catch(e) {}
+    </script>
+
+    <!-- Service Worker 註冊 -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then((reg) => console.log('SW registered:', reg.scope))
+            .catch((err) => console.log('SW registration failed:', err));
+        });
+      }
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Noto+Sans+TC:wght@300;400;500;600;700&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- 6 主題 CSS variables 系統 -->
+    <link rel="stylesheet" href="./theme.css" />
+
+    <style>
+      body {
+        font-family: 'Noto Sans TC', 'Inter', sans-serif;
+        background-color: var(--paper, #F4EDE0);
+        color: var(--ink, #2B2118);
+        overscroll-behavior-y: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
+      .pt-safe { padding-top: env(safe-area-inset-top); }
+      .pl-safe { padding-left: env(safe-area-inset-left); }
+      .pr-safe { padding-right: env(safe-area-inset-right); }
+    </style>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.0.0",
+        "react/": "https://esm.sh/react@19.0.0/",
+        "react-dom": "https://esm.sh/react-dom@19.0.0",
+        "react-dom/": "https://esm.sh/react-dom@19.0.0/",
+        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+        "@google/genai": "https://esm.sh/@google/genai@1.30.0",
+        "lucide-react": "https://esm.sh/lucide-react@0.454.0?deps=react@19.0.0",
+        "recharts": "https://esm.sh/recharts@2.13.0?deps=react@19.0.0,react-dom@19.0.0",
+        "xlsx": "https://esm.sh/xlsx@0.18.5"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>
