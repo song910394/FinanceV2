@@ -1,13 +1,17 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { LayoutDashboard, List, CreditCard, PieChart, Settings as SettingsIcon, Cloud, CheckCircle2, RefreshCw, AlertCircle, Wallet, WifiOff } from 'lucide-react';
+import { LayoutDashboard, List, CreditCard, PieChart, Settings as SettingsIcon, Cloud, CheckCircle2, RefreshCw, AlertCircle, Wallet, WifiOff, Sparkles, CalendarClock, Repeat2, Plus } from 'lucide-react';
 import TransactionList from './components/TransactionList';
 import Dashboard from './components/Dashboard';
 import Reconciliation from './components/Reconciliation';
 import Settings from './components/Settings';
 import BudgetManager from './components/BudgetManager';
 import SalaryHistory from './components/SalaryHistory';
-import { Transaction, DEFAULT_CATEGORIES, CardBank, CardSetting, IncomeSource, MonthlyBudget, SalaryAdjustment, BackupData } from './types';
+import Insights from './components/Insights';
+import Installments from './components/Installments';
+import Subscriptions from './components/Subscriptions';
+import QuickAdd from './components/QuickAdd';
+import { Transaction, DEFAULT_CATEGORIES, CardBank, CardSetting, IncomeSource, MonthlyBudget, SalaryAdjustment, BackupData, Installment, Subscription } from './types';
 import { INITIAL_TRANSACTIONS } from './constants';
 import { saveToGoogleSheet, loadFromGoogleSheet } from './services/googleSheetService';
 import { useTheme } from './hooks/useTheme';
@@ -15,9 +19,12 @@ import { useTheme } from './hooks/useTheme';
 enum Tab {
   DASHBOARD = '概覽',
   TRANSACTIONS = '記帳',
-  SALARY_HISTORY = '薪資歷程',
-  BUDGET = '帳務',
+  INSIGHTS = '洞察',
   RECONCILIATION = '對帳',
+  INSTALLMENTS = '分期',
+  SUBSCRIPTIONS = '訂閱',
+  SALARY_HISTORY = '薪資',
+  BUDGET = '帳務',
   SETTINGS = '設定'
 }
 
@@ -37,6 +44,8 @@ interface PersistedState {
   incomeSources: IncomeSource[];
   budgets: MonthlyBudget[];
   salaryAdjustments: SalaryAdjustment[];
+  installments?: Installment[];
+  subscriptions?: Subscription[];
 }
 
 function loadPersisted(): PersistedState | null {
@@ -73,6 +82,9 @@ function App() {
   ]);
   const [budgets, setBudgets] = useState<MonthlyBudget[]>(persisted?.budgets || []);
   const [salaryAdjustments, setSalaryAdjustments] = useState<SalaryAdjustment[]>(persisted?.salaryAdjustments || []);
+  const [installments, setInstallments] = useState<Installment[]>((persisted as any)?.installments || []);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>((persisted as any)?.subscriptions || []);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   // 雲端同步狀態
   const [googleScriptUrl, setGoogleScriptUrl] = useState<string>(() => {
@@ -102,9 +114,9 @@ function App() {
   useEffect(() => {
     savePersisted({
       transactions, categories, cardBanks, budget, cardSettings,
-      incomeSources, budgets, salaryAdjustments
+      incomeSources, budgets, salaryAdjustments, installments, subscriptions
     });
-  }, [transactions, categories, cardBanks, budget, cardSettings, incomeSources, budgets, salaryAdjustments]);
+  }, [transactions, categories, cardBanks, budget, cardSettings, incomeSources, budgets, salaryAdjustments, installments, subscriptions]);
 
   // V2 關鍵差異：自動同步只在「使用者已主動設定 URL」後才啟動
   // 第一次開 APP（沒設 URL）= 完全離線、不會跟網路打交道
@@ -121,7 +133,7 @@ function App() {
       try {
         await saveToGoogleSheet(googleScriptUrl, {
           transactions, categories, budget, cardBanks, cardSettings,
-          incomeSources, budgets, salaryAdjustments
+          incomeSources, budgets, salaryAdjustments, installments, subscriptions
         });
         setSyncStatus('saved');
         const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -133,7 +145,7 @@ function App() {
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [transactions, categories, budget, cardBanks, cardSettings, incomeSources, budgets, salaryAdjustments, googleScriptUrl, isOnline]);
+  }, [transactions, categories, budget, cardBanks, cardSettings, incomeSources, budgets, salaryAdjustments, installments, subscriptions, googleScriptUrl, isOnline]);
 
   // 從雲端載入（手動觸發）
   const handleManualLoad = useCallback(async (url: string) => {
@@ -149,6 +161,8 @@ function App() {
         if (data.incomeSources) setIncomeSources(data.incomeSources);
         if (data.budgets) setBudgets(data.budgets);
         if (data.salaryAdjustments) setSalaryAdjustments(data.salaryAdjustments);
+        if ((data as any).installments) setInstallments((data as any).installments);
+        if ((data as any).subscriptions) setSubscriptions((data as any).subscriptions);
         setSyncStatus('saved');
         const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         setLastSyncedTime(t);
@@ -195,18 +209,39 @@ function App() {
     setIncomeSources([]);
     setBudgets([]);
     setSalaryAdjustments([]);
+    setInstallments([]);
+    setSubscriptions([]);
     try {
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(LS_LAST_SYNC_KEY);
     } catch {}
   };
 
+  // 分期 / 訂閱 actions
+  const addInstallment = (it: Omit<Installment, 'id'>) => setInstallments(prev => [...prev, { ...it, id: Math.random().toString(36).slice(2, 11) }]);
+  const editInstallment = (id: string, patch: Partial<Installment>) => setInstallments(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i));
+  const deleteInstallment = (id: string) => setInstallments(prev => prev.filter(i => i.id !== id));
+  const addSubscription = (s: Omit<Subscription, 'id'>) => setSubscriptions(prev => [...prev, { ...s, id: Math.random().toString(36).slice(2, 11) }]);
+  const editSubscription = (id: string, patch: Partial<Subscription>) => setSubscriptions(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i));
+  const deleteSubscription = (id: string) => setSubscriptions(prev => prev.filter(i => i.id !== id));
+
+  // N 鍵快捷 → 打開快速記一筆
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName?.match(/INPUT|TEXTAREA|SELECT/)) return;
+      if (e.key === 'n' || e.key === 'N') { e.preventDefault(); setQuickAddOpen(true); }
+      if (e.key === 'Escape') setQuickAddOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // 設定頁的同步操作
   const handleSettingsSync = async (url: string, isUpload: boolean) => {
     setGoogleScriptUrl(url);
     try { localStorage.setItem(LS_URL_KEY, url); } catch {}
     if (isUpload) {
-      await saveToGoogleSheet(url, { transactions, categories, budget, cardBanks, cardSettings, incomeSources, budgets, salaryAdjustments } as BackupData);
+      await saveToGoogleSheet(url, { transactions, categories, budget, cardBanks, cardSettings, incomeSources, budgets, salaryAdjustments, installments, subscriptions } as BackupData);
       setSyncStatus('saved');
       const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setLastSyncedTime(t);
@@ -248,8 +283,11 @@ function App() {
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           <NavItem icon={<LayoutDashboard size={20} />} label={Tab.DASHBOARD} isActive={activeTab === Tab.DASHBOARD} onClick={() => setActiveTab(Tab.DASHBOARD)} />
           <NavItem icon={<List size={20} />} label={Tab.TRANSACTIONS} isActive={activeTab === Tab.TRANSACTIONS} onClick={() => setActiveTab(Tab.TRANSACTIONS)} />
-          <NavItem icon={<Wallet size={20} />} label={Tab.SALARY_HISTORY} isActive={activeTab === Tab.SALARY_HISTORY} onClick={() => setActiveTab(Tab.SALARY_HISTORY)} />
+          <NavItem icon={<Sparkles size={20} />} label={Tab.INSIGHTS} isActive={activeTab === Tab.INSIGHTS} onClick={() => setActiveTab(Tab.INSIGHTS)} />
           <NavItem icon={<CreditCard size={20} />} label={Tab.RECONCILIATION} isActive={activeTab === Tab.RECONCILIATION} onClick={() => setActiveTab(Tab.RECONCILIATION)} />
+          <NavItem icon={<CalendarClock size={20} />} label={Tab.INSTALLMENTS} isActive={activeTab === Tab.INSTALLMENTS} onClick={() => setActiveTab(Tab.INSTALLMENTS)} />
+          <NavItem icon={<Repeat2 size={20} />} label={Tab.SUBSCRIPTIONS} isActive={activeTab === Tab.SUBSCRIPTIONS} onClick={() => setActiveTab(Tab.SUBSCRIPTIONS)} />
+          <NavItem icon={<Wallet size={20} />} label={Tab.SALARY_HISTORY} isActive={activeTab === Tab.SALARY_HISTORY} onClick={() => setActiveTab(Tab.SALARY_HISTORY)} />
           <NavItem icon={<PieChart size={20} />} label={Tab.BUDGET} isActive={activeTab === Tab.BUDGET} onClick={() => setActiveTab(Tab.BUDGET)} />
           <div className="pt-4 mt-4" style={{ borderTop: '1px solid var(--rule-soft)' }}>
             <NavItem icon={<SettingsIcon size={20} />} label={Tab.SETTINGS} isActive={activeTab === Tab.SETTINGS} onClick={() => setActiveTab(Tab.SETTINGS)} />
@@ -281,7 +319,36 @@ function App() {
 
         <main className="flex-1 overflow-y-auto scrollbar-hide" style={{ background: 'var(--paper)' }}>
           <div className="p-4 pb-28 md:p-8 md:pb-8 max-w-7xl mx-auto">
-            {activeTab === Tab.DASHBOARD && <Dashboard transactions={transactions} budget={budget} cardBanks={cardBanks} cardSettings={cardSettings} />}
+            {activeTab === Tab.DASHBOARD && (
+              <Dashboard
+                transactions={transactions}
+                budget={budget}
+                cardBanks={cardBanks}
+                cardSettings={cardSettings}
+                installments={installments}
+                subscriptions={subscriptions}
+                onJumpTab={(t: string) => {
+                  const map: Record<string, Tab> = {
+                    transactions: Tab.TRANSACTIONS, insights: Tab.INSIGHTS,
+                    reconciliation: Tab.RECONCILIATION, installments: Tab.INSTALLMENTS,
+                    subscriptions: Tab.SUBSCRIPTIONS, budget: Tab.BUDGET, salary: Tab.SALARY_HISTORY,
+                  };
+                  if (map[t]) setActiveTab(map[t]);
+                }}
+                onQuickAdd={() => setQuickAddOpen(true)}
+              />
+            )}
+            {activeTab === Tab.INSIGHTS && (
+              <Insights transactions={transactions} budget={budget} categories={categories} />
+            )}
+            {activeTab === Tab.INSTALLMENTS && (
+              <Installments installments={installments} cardBanks={cardBanks} categories={categories}
+                onAdd={addInstallment} onEdit={editInstallment} onDelete={deleteInstallment} />
+            )}
+            {activeTab === Tab.SUBSCRIPTIONS && (
+              <Subscriptions subscriptions={subscriptions} cardBanks={cardBanks} categories={categories}
+                onAdd={addSubscription} onEdit={editSubscription} onDelete={deleteSubscription} />
+            )}
             {activeTab === Tab.TRANSACTIONS && (
               <TransactionList transactions={transactions} categories={categories} cardBanks={cardBanks}
                 onAddTransaction={addTransaction} onAddTransactions={addTransactions}
@@ -311,18 +378,47 @@ function App() {
           </div>
         </main>
 
-        {/* Mobile bottom nav */}
-        <nav className="lg:hidden fixed bottom-0 w-full z-50 pb-safe" style={{ background: 'color-mix(in srgb, var(--card) 90%, transparent)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--rule-soft)' }}>
-          <div className="grid grid-cols-6 h-16">
-            <MobileNavItem icon={<LayoutDashboard size={20} />} label="概覽" isActive={activeTab === Tab.DASHBOARD} onClick={() => setActiveTab(Tab.DASHBOARD)} />
-            <MobileNavItem icon={<List size={20} />} label="記帳" isActive={activeTab === Tab.TRANSACTIONS} onClick={() => setActiveTab(Tab.TRANSACTIONS)} />
-            <MobileNavItem icon={<Wallet size={20} />} label="薪資" isActive={activeTab === Tab.SALARY_HISTORY} onClick={() => setActiveTab(Tab.SALARY_HISTORY)} />
-            <MobileNavItem icon={<CreditCard size={20} />} label="對帳" isActive={activeTab === Tab.RECONCILIATION} onClick={() => setActiveTab(Tab.RECONCILIATION)} />
-            <MobileNavItem icon={<PieChart size={20} />} label="帳務" isActive={activeTab === Tab.BUDGET} onClick={() => setActiveTab(Tab.BUDGET)} />
-            <MobileNavItem icon={<SettingsIcon size={20} />} label="設定" isActive={activeTab === Tab.SETTINGS} onClick={() => setActiveTab(Tab.SETTINGS)} />
+        {/* 手機 FAB - 快速記一筆 */}
+        <button
+          className="lg:hidden fixed right-5 z-40 active:scale-95 transition-transform"
+          style={{
+            bottom: 'calc(var(--bottom-nav-h, 4rem) + env(safe-area-inset-bottom, 0px) + 16px)',
+            background: 'var(--ink)', color: 'var(--card)',
+            width: 56, height: 56, borderRadius: 18,
+            boxShadow: 'var(--shadow-pop)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => setQuickAddOpen(true)}
+          aria-label="快速記一筆"
+        >
+          <Plus size={26} strokeWidth={2.5} />
+        </button>
+
+        {/* Mobile bottom nav (可橫滾) */}
+        <nav className="lg:hidden fixed bottom-0 w-full z-50 pb-safe" style={{ background: 'color-mix(in srgb, var(--card) 92%, transparent)', backdropFilter: 'blur(14px)', borderTop: '1px solid var(--rule-soft)', '--bottom-nav-h': '4rem' } as any}>
+          <div className="flex overflow-x-auto scrollbar-hide h-16" style={{ scrollSnapType: 'x mandatory' }}>
+            <MobileNavItem icon={<LayoutDashboard size={18} />} label="概覽" isActive={activeTab === Tab.DASHBOARD} onClick={() => setActiveTab(Tab.DASHBOARD)} />
+            <MobileNavItem icon={<List size={18} />} label="記帳" isActive={activeTab === Tab.TRANSACTIONS} onClick={() => setActiveTab(Tab.TRANSACTIONS)} />
+            <MobileNavItem icon={<Sparkles size={18} />} label="洞察" isActive={activeTab === Tab.INSIGHTS} onClick={() => setActiveTab(Tab.INSIGHTS)} />
+            <MobileNavItem icon={<CreditCard size={18} />} label="對帳" isActive={activeTab === Tab.RECONCILIATION} onClick={() => setActiveTab(Tab.RECONCILIATION)} />
+            <MobileNavItem icon={<CalendarClock size={18} />} label="分期" isActive={activeTab === Tab.INSTALLMENTS} onClick={() => setActiveTab(Tab.INSTALLMENTS)} />
+            <MobileNavItem icon={<Repeat2 size={18} />} label="訂閱" isActive={activeTab === Tab.SUBSCRIPTIONS} onClick={() => setActiveTab(Tab.SUBSCRIPTIONS)} />
+            <MobileNavItem icon={<Wallet size={18} />} label="薪資" isActive={activeTab === Tab.SALARY_HISTORY} onClick={() => setActiveTab(Tab.SALARY_HISTORY)} />
+            <MobileNavItem icon={<PieChart size={18} />} label="帳務" isActive={activeTab === Tab.BUDGET} onClick={() => setActiveTab(Tab.BUDGET)} />
+            <MobileNavItem icon={<SettingsIcon size={18} />} label="設定" isActive={activeTab === Tab.SETTINGS} onClick={() => setActiveTab(Tab.SETTINGS)} />
           </div>
         </nav>
       </div>
+
+      {/* 全域 QuickAdd 底部彈窗 */}
+      {quickAddOpen && (
+        <QuickAdd
+          categories={categories}
+          cardBanks={cardBanks}
+          onClose={() => setQuickAddOpen(false)}
+          onSubmit={(tx) => { addTransaction(tx); setQuickAddOpen(false); }}
+        />
+      )}
     </div>
   );
 }
@@ -343,9 +439,10 @@ const NavItem = ({ icon, label, isActive, onClick }: { icon: React.ReactNode, la
 
 const MobileNavItem = ({ icon, label, isActive, onClick }: { icon: React.ReactNode, label: string, isActive: boolean, onClick: () => void }) => (
   <button onClick={onClick}
-    className="flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform outline-none rounded-lg"
+    className="shrink-0 flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform outline-none rounded-lg"
+    style={{ width: 64, scrollSnapAlign: 'start' }}
     aria-label={label}>
-    <div className="p-2 rounded-xl transition-all duration-200"
+    <div className="p-1.5 rounded-xl transition-all duration-200"
       style={{
         background: isActive ? 'var(--accent-soft)' : 'transparent',
         color: isActive ? 'var(--accent)' : 'var(--ink-mute)',

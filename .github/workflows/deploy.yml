@@ -27,11 +27,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '22'
+          # 不指定 cache，避免在沒有 lock file 時 setup-node 直接 fail
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        # 有 package-lock.json 就用 npm ci（穩定、快），否則退回 npm install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps
+          else
+            npm install --legacy-peer-deps
+          fi
 
       - name: Build
         run: npm run build

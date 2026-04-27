@@ -64,6 +64,38 @@ export interface BackupData {
   incomeSources?: IncomeSource[];
   budgets?: MonthlyBudget[];
   salaryAdjustments?: SalaryAdjustment[];
+  installments?: Installment[];
+  subscriptions?: Subscription[];
+}
+
+// 分期付款
+export interface Installment {
+  id: string;
+  description: string;       // 名稱：iPhone 15 Pro / Dyson 吸塵器…
+  totalAmount: number;       // 商品總金額
+  monthlyAmount: number;     // 每期金額
+  totalPeriods: number;      // 總期數
+  paidPeriods: number;       // 已繳期數
+  startDate: string;         // YYYY-MM-DD 第一期扣款日
+  cardBank: string;          // 哪張卡
+  category?: Category;       // 分類（選填）
+  note?: string;
+}
+
+// 定期支出/訂閱
+export type SubscriptionFrequency = 'monthly' | 'yearly' | 'quarterly' | 'weekly';
+
+export interface Subscription {
+  id: string;
+  name: string;              // Netflix / Spotify / 健身房…
+  amount: number;            // 每期金額
+  frequency: SubscriptionFrequency;
+  nextChargeDate: string;    // YYYY-MM-DD
+  paymentMethod: PaymentMethod; // 現金 / 刷卡
+  cardBank?: string;         // 若刷卡，哪張
+  category?: Category;
+  isActive: boolean;         // 是否啟用
+  note?: string;
 }
 
 export interface SalaryAdjustment {
